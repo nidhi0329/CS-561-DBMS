@@ -1,0 +1,274 @@
+Name: Nidhi Chovatiya
+CWID: 10457344
+
+Query1:
+
+with Query1 as
+(
+select
+	cust, 
+	prod, 
+	month, 
+	state,
+	sum(quant) as sum_qnt,
+	count(quant)as cnt_qnt
+from sales
+group by cust, prod, month, state
+order by cust, prod, month, state
+)
+select
+	Q1.cust CUSTOMER, 
+	Q1.prod PRODUCT, 
+	Q1.month as month, 
+	Q1."state",
+	cast(Q1.sum_qnt/Q1.cnt_qnt as decimal(10,3)) as CUST_AVG,
+	cast(sum(Q2.sum_qnt)/sum(Q2.cnt_qnt) as decimal(10,3))as OTHER_PROD_AVG,
+	cast(sum(Q3.sum_qnt)/sum(Q3.cnt_qnt) as decimal(10,3))as OTHER_MONTH_AVG,
+	cast(sum(Q4.sum_qnt)/sum(Q4.cnt_qnt) as decimal(10,3))as OTHER_STATE_AVG
+from Query1 Q1
+	left join Query1 Q2 on Q1.cust = Q2.cust and Q1.prod <> Q2.prod and Q1.state = Q2.state and Q1.month = Q2.month
+	left join Query1 Q3 on Q1.cust = Q3.cust and Q1.prod = Q3.prod and Q1.state = Q3.state and Q1.month <> Q3.month
+	left join Query1 Q4 on Q1.cust = Q4.cust and Q1.prod = Q4.prod and Q1.state <> Q4.state and Q1.month = Q4.month
+group by Q1.cust, Q1.prod, Q1.month, Q1."state", CUST_AVG
+order by Q1.cust, Q1.prod, Q1.month, Q1."state"
+;
+
+Query2:
+
+with query1 as
+(
+select 
+	cust CUSTOMER, 
+	prod PRODUCT, 
+	state, 
+	round(avg(quant),0) quant 
+from sales 
+where month between 1 and 3 
+group by CUSTOMER, PRODUCT, state
+), 
+
+query2 as 
+(
+select 
+	cust CUSTOMER, 
+	prod PRODUCT,  
+	state, 
+	round(avg(quant),0) quant 
+from sales 
+where month between 4 and 6 
+group by CUSTOMER, PRODUCT, state
+),
+
+query3 as 
+(
+select 
+	cust CUSTOMER, 
+	prod PRODUCT, 
+	state, 
+	round(avg(quant),0) quant 
+from sales 
+where month between 7 and 9 
+group by CUSTOMER, PRODUCT, state
+), 
+
+query4 as 
+(
+select 
+	cust CUSTOMER, 
+	prod PRODUCT, 
+	state, 
+	round(avg(quant),0) quant 
+from sales 
+where month between 10 and 12 
+group by CUSTOMER, PRODUCT, state
+), 
+
+base as
+(
+select 
+	cust CUSTOMER, 
+	prod PRODUCT,  
+	state 
+from sales 
+group by CUSTOMER, PRODUCT, state
+), 
+
+A1 as 
+( 
+select 
+	b.CUSTOMER, 
+	b.PRODUCT, 
+	b.state, 
+	cast('1' as int) q1, 
+	cast(null as numeric) before_avg, 
+	query2.quant after_avg 
+from base b left join query2 using(CUSTOMER, PRODUCT, state)
+), 
+
+A2 as 
+(
+select 
+	b.CUSTOMER, 
+	b.PRODUCT,  
+	b.state, 
+	cast('2' as int) q1, 
+	query1.quant before_avg,
+	query3.quant after_avg 
+from base b left join query1 using(CUSTOMER, PRODUCT, state) left join query3 using(CUSTOMER, PRODUCT, state)
+), 
+
+A3 as 
+(
+select 
+	b.CUSTOMER, 
+	b.PRODUCT,  
+	b.state, 
+	cast('3' as int) q1, 
+	query2.quant before_avg, 
+	query4.quant after_avg 
+from base b left join query2 using(CUSTOMER, PRODUCT, state) left join query4 using(CUSTOMER, PRODUCT, state)
+), 
+
+A4 as 
+(
+select 
+	b.CUSTOMER, 
+	b.PRODUCT, 
+	b.state, 
+	cast('4' as int) q1, 
+	query3.quant before_avg, 
+	cast(null as numeric) after_avg 
+from base b left join query3 using(CUSTOMER, PRODUCT, state)
+),
+
+A5 as
+(
+select * 
+from A1 
+	union 
+select * 
+from A2 
+	union 
+select * 
+from A3 
+	union 
+select * 
+from A4
+)
+
+select * 
+from A5 
+order by CUSTOMER, PRODUCT, q1, state
+
+Query3:
+
+with cte1 as 
+(
+--this statement calculates the frequency of any quantity
+select
+	prod,
+	quant,
+	count(*) as frequency
+from sales
+group by prod, quant
+order by prod, quant
+), 
+cte2 as 
+(
+--this statement calculates the ranks. it assigns the same ranks for the same values.
+select
+	a.prod,
+	a.quant,
+	sum(b.frequency) as rank
+from cte1 a
+	left join cte1 b on a.prod = b.prod and a.quant >= b.quant
+group by a.prod, a.quant
+order by a.prod, a.quant
+), 
+cte3 as
+(
+--getting half of max rank value
+select
+		a.prod,
+		max(a.rank) as max_rank
+	from cte2 a
+		group by
+			a.prod
+), cte4 as (
+--finding new middle value to find median
+select
+	a.prod,
+	a.quant,
+	a.rank,
+	b.max_rank,
+	b.max_rank/2 as max_rank_half,
+	(case when (b.max_rank % 2) = 0 then (b.max_rank/2 + 1) else (b.max_rank/2 + 0.5) end) as new_max_half
+from cte2 a
+	left join cte3 b on a.prod = b.prod
+)
+--finding average of values which falls between half of max rank and new rank
+select
+	a.prod PRODUCT,
+	round(avg(a.quant),2) as "median quant"
+from cte4 a
+where a.rank between a.max_rank_half and a.new_max_half
+group by a.prod 
+order by a.prod
+;
+
+
+Query4:
+
+with Query1 as 
+(
+select 
+	cust, 
+	prod, 
+	month, 
+	sum(quant) 
+from sales 
+group by cust, prod, month 
+order by cust, prod, month
+),
+
+Query2 as 
+(
+select 
+	cust, 
+	prod, 
+	sum(sum) 
+from Query1 
+group by cust, prod
+),
+
+Query3 as 
+(
+select 
+	Q1.cust, 
+	Q1.prod, 
+	Q1.month, 
+	Q1.sum, 
+	sum(Q2.sum) TOTAL 
+from Query1 Q1 join Query1 Q2 on Q2.month <= Q1.month and Q1.cust = Q2.cust and Q1.prod = Q2.prod 
+group by Q1.cust, Q1.prod, Q1.month, Q1.sum 
+order by cust, prod, month
+), 
+
+Query4 as 
+(
+select 
+	Q1.cust, 
+	Q1.prod, 
+	Q1.month 
+from Query3 Q1, Query2 Q2 
+where Q1.cust = Q2.cust and Q1.prod = Q2.prod and Q1.TOTAL >= (0.75 * Q2.sum) 
+order by cust, prod, month
+)
+
+select 
+	cust CUSTOMER, 
+	prod PRODUCT, 
+	min(month) as "75% purchased by month" 
+from Query4 
+group by cust, prod 
+order by cust, prod

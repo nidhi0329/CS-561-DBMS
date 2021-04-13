@@ -1,0 +1,232 @@
+Assignment-2
+CS-561: Database Management System
+Name: Nidhi Chovatiya                                                                                                              CWID: 10457344
+
+Query-1:
+with Q1 AS 
+(	
+	select cust CUSTOMER, 
+	              min(quant) MIN_Q, 
+                                     max(quant) MAX_Q, 
+	              cast(avg(quant) as decimal(10,2)) AVG_Q 
+	from sales 
+	group by cust
+),
+Q2 AS
+(
+	select Q1.CUSTOMER, 
+                                     Q1.MIN_Q, 
+	              s1.prod MIN_PROD, 
+                                     s1.day DAY_MIN, s1.month MONTH_MIN, s1.year YEAR_MIN, 
+                                     s1.state ST_MIN, 
+	              Q1.MAX_Q, Q1.AVG_Q
+	from Q1, sales S1
+	where Q1.CUSTOMER = S1.cust and 
+		  Q1.MIN_Q = S1.quant
+)	
+select Q2.CUSTOMER, 
+              Q2.MIN_Q, Q2.MIN_PROD, 
+              Q2.DAY_MIN min_day, Q2.MONTH_MIN min_month, Q2.YEAR_MIN min_year, 
+              Q2.ST_MIN,
+	   
+              Q2.MAX_Q, 
+              s2.prod MAX_PROD,
+              s2.day max_day, s2.month max_month, s2.year max_year, 
+              s2.state ST_MAX, 
+              Q2.AVG_Q
+from Q2, sales S2
+where Q2.CUSTOMER = S2.cust and 
+               Q2.MAX_Q = S2.quant
+
+Query-2:
+with jan_min as
+(
+	select cust, 
+	              prod, 
+                                     min(quant) jan_min
+ 	from sales s
+ 	where year > 1999 and month = '1'
+ 	group by cust, prod
+),
+jan as 
+( 
+	select j.cust, 
+                                     j.prod, 
+	              j.jan_min, s.day jan_day, s.month jan_month, s.year jan_year
+ 	from jan_min j, sales s
+ 	where j.cust = s.cust and 
+	               j.prod = s.prod and 
+                                      j.jan_min = s.quant
+),
+feb_max as
+( 
+	select cust, 
+	              prod, 
+	              max(quant) feb_max
+ 	from sales s
+ 	where month = '2'
+ 	group by cust,prod
+),
+feb as
+(
+	select f.cust, 
+                                     f.prod, 
+	              f.feb_max, 
+	              s.day feb_day, s.month feb_month, s.year feb_year
+ 	from sales s, feb_max f
+ 	where f.cust = s.cust and 
+	               f.prod = s.prod and 
+                                      f.feb_max = s.quant
+),
+mar_max as
+( 
+	select cust, 
+	               prod,
+	               max(quant) mar_max
+ 	from sales s
+ 	where month = '3'
+ 	group by cust, prod
+ ),
+ mar as
+ ( 
+	 select ma.cust, 
+	               ma.prod, 
+	               ma.mar_max, 
+	               s.day mar_day, s.month mar_month, s.year mar_year
+  	 from sales s, mar_max ma
+    	 where ma.cust = s.cust and 
+	                ma.prod = s.prod and 
+	                ma.mar_max = s.quant
+ )
+ select cust,
+               prod,
+               jan.jan_min, jan.jan_month, jan.jan_day, jan.jan_year,
+              feb.feb_max, feb.feb_month, feb.feb_day, feb.feb_year,
+              mar.mar_max, mar.mar_month,mar.mar_day, mar.mar_year
+ from (jan full outer join feb using (cust,prod)) 
+ 	 full outer join mar using(cust,prod)
+
+Query-3:
+with Q1 as
+(
+    	select month, 
+                  	              prod , 
+                                     sum (quant) Total
+    	from sales
+    	group by month, prod
+    	order by month, sum(quant)
+),
+Q2 as 
+(
+	select month, 
+	              max(Total) MOST_POP_TOTAL_Q, 
+	              min(Total) LEAST_POP_TOTAL_Q
+	from Q1
+	group by month
+)
+
+	select b.month, 
+	              a1.prod MOST_POPULAR_PROD, 
+	              b.MOST_POP_TOTAL_Q,
+	              a2.prod LEAST_POPULAR_PROD, 
+	              b.LEAST_POP_TOTAL_Q
+	from Q2 b, Q1 a1, Q1 a2
+	where (a1.month = b.month and a1.Total=b.MOST_POP_TOTAL_Q)  and 
+	  	(a2.month = b.month and a2.Total=b.LEAST_POP_TOTAL_Q)
+
+Query-4:
+with Q1 as
+(
+	select prod, 
+	              month M, 
+                                     sum(quant) total
+	from sales
+	group by prod, M
+	order by prod, M
+),
+Q2 as
+(
+	select Q1.prod, 
+	              max(total) max_q, 
+                                     min(total) min_q
+	from Q1
+	group by Q1.prod
+	order by Q1.prod
+)
+select b.prod PRODUCT, 
+              a1.M MOST_FAV_MO, 
+              a2.M LEAST_FAV_MO
+from Q2 b, Q1 a1, Q1 a2
+where (b.prod = a1.prod and b.max_q = a1.total) and 
+	  (b.prod = a2.prod and b.min_q = a2.total)
+
+Query-5:
+with Q1 as (
+	select prod, 
+                                     cust, 
+                                     cast(avg(quant) as decimal(8,2)) avg_q, 
+                                     sum(quant) total_q, count(prod) count_q
+	from sales
+	group by cust, prod
+	order by cust, prod
+),
+nj as 
+(
+	select al.prod, 
+                                     al.cust, 
+	              cast(avg(s.quant) as decimal(8,2)) nj_avg
+	from Q1 al, sales s
+	where state like 'NJ' and 
+	               al.prod = s.prod and 
+	               al.cust = s.cust
+	group by al.cust, al.prod
+), 
+ny as (
+	select al.prod, 
+	              al.cust, 
+                                     cast(avg(s.quant) as decimal(8,2)) ny_avg
+	from Q1 al, sales s
+	where state like 'NY' and 
+	               al.prod = s.prod and 
+	               al.cust = s.cust
+	group by al.cust, al.prod
+), 
+pa as (
+	select al.prod, 
+	              al.cust, 
+                                    cast(avg(s.quant) as decimal(8,2)) pa_avg
+	from Q1 al, sales s
+	where state like 'PA' and 
+	               al.prod = s.prod and 
+	               al.cust = s.cust
+	group by al.cust, al.prod
+), 
+ct as (
+	select al.prod, 
+	              al.cust, 
+                                     cast(avg(s.quant) as decimal(8,2)) ct_avg
+	from Q1 al, sales s
+	where state like 'CT' and 
+	               al.prod = s.prod and 
+	               al.cust = s.cust
+	group by al.cust, al.prod
+)
+select al.prod, 
+             al.cust, 
+             ct.ct_avg, 
+             nj.nj_avg, 
+             ny.ny_avg, 
+             pa.pa_avg, 
+             al.avg_q, 
+             al.total_q, 
+             al.count_q
+from Q1 al
+left join nj on al.cust = nj.cust and
+	      al.prod = nj.prod 
+left join ny on al.cust = ny.cust and 
+	        al.prod = ny.prod 
+left join pa on al.cust = pa.cust and 
+	        al.prod = pa.prod 
+left join ct on al.cust = ct.cust and 
+	       al.prod = ct.prod
+
